@@ -231,7 +231,7 @@ std::string fdLoadFile(std::string &path) {
 
 int main() {
 
-    std::string image_file("/Users/yang/CLionProjects/test_tnn/data/images/img.jpg");
+    std::string image_file("/Users/yang/CLionProjects/test_tnn/data/images/bus.jpeg");
     cv::Mat image = cv::imread(image_file);
     cv::Mat input_image;
     cv::resize(image, input_image, cv::Size(640,640));
@@ -340,7 +340,7 @@ int main() {
         box.label = label;
         boxes.push_back(box);
     }
-    nms(boxes, 0.3);
+    nms(boxes, 0.2);
     draw_coco_bboxes(image, boxes);
     cv::waitKey(0);
     return 0;
