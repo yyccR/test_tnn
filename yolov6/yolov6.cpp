@@ -242,18 +242,18 @@ int main() {
     std::string proto("/Users/yang/CLionProjects/test_tnn/yolov6/yolov6n.opt.tnnproto");
     std::string model("/Users/yang/CLionProjects/test_tnn/yolov6/yolov6n.opt.tnnmodel");
 
-    TNN_NS::TNN tnn;
+    std::shared_ptr<TNN_NS::TNN> tnn = std::make_shared<TNN_NS::TNN>();
     TNN_NS::ModelConfig model_config;
     model_config.params.push_back(fdLoadFile(proto));
     model_config.params.push_back(fdLoadFile(model));
-    tnn.Init(model_config);
+    tnn->Init(model_config);
 
     TNN_NS::NetworkConfig config;
     config.device_type = TNN_NS::DEVICE_X86;
     TNN_NS::Status status;
-    auto net_instance = tnn.CreateInst(config, status);
+    auto net_instance = tnn->CreateInst(config, status);
 
-    std::cout << (status == TNN_NS::TNN_OK) << std::endl;
+    std::cout << "状态" << (int)status << std::endl;
 
     TNN_NS::BlobMap blobs;
     net_instance->GetAllInputBlobs(blobs);
@@ -300,18 +300,24 @@ int main() {
 
     float score_threshold = 0.4;
     std::vector<BoxInfo> boxes;
-    for (unsigned int i = 0; i < num_anchors; ++i)
+    auto output = (float*)output_mat->GetData();
+    for (int i = 0; i < num_anchors; ++i)
     {
-        const float *offset_obj_cls_ptr =
-                (float *) output_mat->GetData() + (i * (num_classes + 5)); // row ptr
-        float obj_conf = offset_obj_cls_ptr[4];
+//        if (*(output+i*(num_classes+5)+4) > 0.4){
+//
+//        }
+//        const float *offset_obj_cls_ptr = output + (i * (num_classes + 5)); // row ptr
+        float obj_conf = *(output + (i * (num_classes + 5)) + 4);
+//        float obj_conf = offset_obj_cls_ptr[4];
         if (obj_conf < score_threshold) continue; // filter first.
 
-        float cls_conf = offset_obj_cls_ptr[5];
+//        float cls_conf = offset_obj_cls_ptr[5];
+        float cls_conf = *(output + (i * (num_classes + 5))+5);
         int label = 0;
         for (unsigned int j = 0; j < num_classes; ++j)
         {
-            float tmp_conf = offset_obj_cls_ptr[j + 5];
+//            float tmp_conf = offset_obj_cls_ptr[j + 5];
+            float tmp_conf = *(output + (i * (num_classes + 5))+j+5);
             if (tmp_conf > cls_conf)
             {
                 cls_conf = tmp_conf;
@@ -319,13 +325,18 @@ int main() {
             }
         } // argmax
 
+        std::cout << "obj_conf " << obj_conf << " cls_conf " << cls_conf << std::endl;
         float conf = obj_conf * cls_conf; // cls_conf (0.,1.)
         if (conf < score_threshold) continue; // filter
 
-        float cx = offset_obj_cls_ptr[0];
-        float cy = offset_obj_cls_ptr[1];
-        float w = offset_obj_cls_ptr[2];
-        float h = offset_obj_cls_ptr[3];
+//        float cx = offset_obj_cls_ptr[0];
+        float cx = *(output + (i * (num_classes + 5))+0);
+//        float cy = offset_obj_cls_ptr[1];
+        float cy = *(output + (i * (num_classes + 5))+1);
+//        float w = output + (i * (num_classes + 5))[2];
+        float w = *(output + (i * (num_classes + 5))+2);
+//        float h = offset_obj_cls_ptr[3];
+        float h = *(output + (i * (num_classes + 5))+3);
         float x1 = (cx - w / 2.f) * w_scale;
         float y1 = (cy - h / 2.f) * h_scale;
         float x2 = (cx + w / 2.f) * w_scale;
@@ -336,10 +347,59 @@ int main() {
         box.y1 = std::max(0.f, y1);
         box.x2 = std::min(x2, (float) image.cols - 1.f);
         box.y2 = std::min(y2, (float) image.rows - 1.f);
-        box.score = conf;
+        box.score = obj_conf;
         box.label = label;
         boxes.push_back(box);
     }
+
+//    for(int i = 0; i < num_anchors; i++){
+//
+//        if(*(output + (i * (num_classes + 5)) + 4) > score_threshold){
+//            int cur_label = 0;
+//            float score = *(output+i*(num_classes+5)+4+1);
+//            for (int label = 0; label < num_classes; label++)
+//            {
+//                //LOGD("decode_infer label %d",label);
+//                //LOGD("decode_infer score %f",scores[label]);
+//                if (*(output+i*(num_classes+5)+5+label) > score)
+//                {
+//                    score = *(output+i*(num_classes+5)+5+label);
+//                    cur_label = label;
+//                }
+//            }
+//
+////            float x = *(output+i*(num_classes+5)+0) * w_scale;
+////            float y = *(output+i*(num_classes+5)+1) * h_scale;
+////            float w = *(output+i*(num_classes+5)+2) * w_scale;
+////            float h = *(output+i*(num_classes+5)+3) * h_scale;
+//
+//    //        float cx = offset_obj_cls_ptr[0];
+//            float x = *(output + (i * (num_classes + 5))+0);
+//    //        float cy = offset_obj_cls_ptr[1];
+//            float y = *(output + (i * (num_classes + 5))+1);
+//    //        float w = output + (i * (num_classes + 5))[2];
+//            float w = *(output + (i * (num_classes + 5))+2);
+//    //        float h = offset_obj_cls_ptr[3];
+//            float h = *(output + (i * (num_classes + 5))+3);
+//            float x1 = (x - w / 2.f) * w_scale;
+//            float y1 = (y - h / 2.f) * h_scale;
+//            float x2 = (x + w / 2.f) * w_scale;
+//            float y2 = (y + h / 2.f) * h_scale;
+//
+//            boxes.push_back(BoxInfo{
+//                x1,
+//                y1,
+//                x2,
+//                y2,
+////                    (float)std::max(0.0, x-w/2.0),
+////                    (float)std::max(0.0, y-h/2.0),
+////                    (float)std::min((float)image.cols, (float)(x+w/2.0)),
+////                    (float)std::min((float)image.rows, (float)(y+h/2.0)),
+//                    *(output+i*(num_classes+5)+4),
+//                    cur_label
+//            });
+//        }
+//    }
     nms(boxes, 0.2);
     draw_coco_bboxes(image, boxes);
     cv::waitKey(0);
